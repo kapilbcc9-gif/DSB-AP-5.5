@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>DSB_Attendance_Kiosk_v5.5</title>
+    
+    <!-- Tailwind & Fonts -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- PDF Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #f8fafc; overflow-x: hidden; }
+        @keyframes scanLine { 0% { top: 6%; opacity: 0.3; } 50% { top: 90%; opacity: 0.95; } 100% { top: 6%; opacity: 0.3; } }
+        .scanner-line { position: absolute; left: 8%; width: 84%; height: 3px; background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent); box-shadow: 0 0 18px #10b981, 0 0 35px #34d399; animation: scanLine 2.6s ease-in-out infinite; pointer-events: none; z-index: 15; }
+        @keyframes cameraFlash { 0% { opacity: 0.95; } 100% { opacity: 0; } }
+        .flash-active { animation: cameraFlash 0.4s ease-out forwards; }
+        @keyframes smoothPop { 0% { opacity: 0; transform: translateY(24px) scale(0.94); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+        .smooth-card-enter { animation: smoothPop 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .mirror-video { transform: scaleX(-1); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 9999px; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-950 text-slate-100 select-none">
+
+    <!-- MAIN KIOSK PAGE -->
+    <div id="publicKioskPage" class="flex-1 flex flex-col min-h-screen">
+        <header class="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-900 border-b border-slate-800 px-3 sm:px-6 py-2.5 sticky top-0 z-30 backdrop-blur-md shadow-lg">
+            <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                    <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg border border-indigo-500/50 shrink-0">
+                        <i class="fa-solid fa-graduation-cap text-white text-lg sm:text-2xl"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <h1 class="text-xs sm:text-xl font-black tracking-tight text-white truncate mt-0.5">
+                            Delhi School of Brilliants
+                        </h1>
+                        <p class="text-[10px] sm:text-xs text-emerald-400 font-bold">Smart Attendance Kiosk</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <div class="bg-slate-900/90 border border-slate-700/80 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl text-right shadow-inner">
+                        <div id="kioskLiveTime" class="text-xs sm:text-base font-black font-mono text-emerald-400 leading-tight">07:30:00 AM</div>
+                        <div id="kioskLiveDate" class="text-[10px] text-slate-400 leading-tight">Sat, 17 Oct</div>
+                    </div>
+                    <button onclick="toggleSettingsMenu()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-indigo-600 border border-slate-700 hover:border-indigo-400 text-slate-200 hover:text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-md">
+                        <i class="fa-solid fa-bars text-emerald-400"></i>
+                        <span class="hidden sm:inline">Menu</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- FULL SCREEN SETTINGS MENU (SLIDE DOWN) -->
+        <div id="fullScreenSettingsMenu" class="hidden fixed inset-0 bg-slate-950/98 backdrop-blur-3xl z-50 overflow-y-auto pt-16 sm:pt-24 pb-10 flex flex-col items-center">
+            <div class="max-w-5xl mx-auto space-y-6 px-4 w-full">
+                <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+                    <span class="text-base sm:text-xl font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                        <i class="fa-solid fa-gears"></i> Application Menu
+                    </span>
+                    <button onclick="toggleSettingsMenu()" class="text-slate-400 hover:text-white text-3xl transition-transform hover:rotate-90">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <button onclick="openReceptionistPinModal()" class="p-6 rounded-3xl bg-slate-900 hover:bg-emerald-900/80 border border-slate-800 hover:border-emerald-500 text-slate-200 hover:text-white text-sm font-bold transition flex flex-col items-center justify-center gap-3 shadow-lg">
+                        <i class="fa-solid fa-user-plus text-emerald-400 text-3xl"></i> 
+                        <span>Reception Portal<br><span class="text-[10px] text-slate-400 font-normal">(Add Staff - PIN protected)</span></span>
+                    </button>
+                    <button onclick="openAdminPinModal()" class="p-6 rounded-3xl bg-slate-900 hover:bg-indigo-900/80 border border-slate-800 hover:border-indigo-500 text-slate-200 hover:text-white text-sm font-bold transition flex flex-col items-center justify-center gap-3 shadow-lg">
+                        <i class="fa-solid fa-shield-halved text-indigo-400 text-3xl"></i> 
+                        <span>Admin Dashboard<br><span class="text-[10px] text-slate-400 font-normal">(Payroll & Config - PIN protected)</span></span>
+                    </button>
+                    <button onclick="switchCameraSource()" class="p-6 rounded-3xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 text-sm font-bold transition flex flex-col items-center justify-center gap-3 shadow-lg">
+                        <i class="fa-solid fa-camera-rotate text-amber-400 text-3xl"></i> 
+                        <span id="cameraSourceLabel">Switch Camera Mode<br><span class="text-[10px] text-slate-400 font-normal">(Fix Browser Blocks)</span></span>
+                    </button>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 flex flex-wrap items-center justify-between gap-4 shadow-xl mt-4">
+                    <div class="flex items-center gap-3 flex-1 min-w-[200px]">
+                        <span class="text-sm font-bold text-slate-300">Simulator Select:</span>
+                        <select id="kioskTestStaffSelect" onchange="onKioskStaffChange()" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-emerald-500 transition"></select>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button onclick="toggleAutoDetection()" id="autoDetectBtn" class="bg-slate-800 text-slate-300 border border-slate-700 font-extrabold px-4 py-2.5 rounded-xl text-sm shadow transition hover:bg-slate-700">
+                            <span id="autoDetectLabel">Auto Sensor: OFF</span>
+                        </button>
+                        <button onclick="downloadAppHtmlFile()" class="p-2.5 rounded-xl bg-sky-600/90 hover:bg-sky-500 text-white transition flex items-center justify-center shadow-lg">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CAMERA CONTAINER -->
+        <main class="flex-1 max-w-5xl w-full mx-auto p-2 sm:p-4 flex flex-col justify-between gap-2.5 relative z-10">
+            <div id="secureContextWarning" class="hidden bg-indigo-950/95 border border-indigo-500 text-indigo-200 px-3 py-2.5 rounded-2xl text-xs flex flex-wrap items-center justify-between gap-2 shadow-xl z-20">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-video-slash text-rose-400 text-base shrink-0 animate-pulse"></i>
+                    <span><b>Notice:</b> Browser blocked webcam. Using Offline Simulator. Run on Localhost to use Webcam.</span>
+                </div>
+                <button onclick="requestCameraPermissionsManually()" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-lg text-xs shadow">Retry Camera</button>
+            </div>
+
+            <div id="kioskCameraContainer" class="relative w-full h-[62vh] sm:h-[70vh] min-h-[380px] bg-slate-900 rounded-3xl overflow-hidden border-2 border-slate-700/90 shadow-2xl flex items-center justify-center transition-all duration-300">
+                <video id="kioskVideo" autoplay playsinline muted class="w-full h-full object-cover mirror-video hidden"></video>
+                <canvas id="simulatorCanvas" class="w-full h-full object-cover"></canvas>
+
+                <div id="scannerLaser" class="scanner-line"></div>
+                <div id="cameraFlashOverlay" class="absolute inset-0 bg-white opacity-0 pointer-events-none z-40"></div>
+
+                <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 p-4">
+                    <div id="faceGuideBox" class="w-60 h-72 sm:w-72 sm:h-80 border-2 border-dashed border-emerald-400/75 rounded-[56px] relative flex flex-col items-center justify-between p-4 transition-all duration-300 shadow-[0_0_50px_rgba(16,185,129,0.12)]">
+                        <div class="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-3xl"></div>
+                        <div class="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-3xl"></div>
+                        <div class="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-3xl"></div>
+                        <div class="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-3xl"></div>
+
+                        <div class="bg-slate-950/85 backdrop-blur-md px-3.5 py-1 rounded-full border border-slate-700 text-[11px] sm:text-xs font-bold text-emerald-400 shadow-md mt-4">
+                            Align Face Within Frame
+                        </div>
+
+                        <div class="w-full max-w-[210px] bg-slate-950/90 backdrop-blur-md p-2 rounded-2xl border border-emerald-500/40 shadow-xl mb-4">
+                            <div class="flex items-center justify-between text-[10px] font-bold mb-1 px-1">
+                                <span id="gazeInstructionText" class="text-slate-300">Awaiting Alignment</span>
+                                <span id="gazePercentText" class="text-emerald-400 font-mono">READY</span>
+                            </div>
+                            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                                <div id="gazeProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-300 transition-all duration-150" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="countdownOverlay" class="hidden absolute inset-0 bg-slate-950/45 backdrop-blur-[2px] flex flex-col items-center justify-center z-30 pointer-events-none">
+                    <div id="countdownNumber" class="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-gradient-to-br from-emerald-400 to-teal-600 text-slate-950 font-black text-5xl sm:text-6xl flex items-center justify-center shadow-[0_0_50px_rgba(16,185,129,0.8)] border-4 border-white animate-bounce">
+                        2
+                    </div>
+                    <p class="mt-3 px-5 py-2 bg-slate-950/95 rounded-full text-white font-extrabold text-xs sm:text-sm border border-emerald-400/50 shadow-xl">
+                        📸 Verifying Biometrics...
+                    </p>
+                </div>
+
+                <div id="smoothVerificationOverlay" class="hidden absolute inset-x-3 bottom-3 sm:inset-x-6 sm:bottom-5 z-30">
+                    <div id="verificationCardInner" class="smooth-card-enter bg-slate-950/95 backdrop-blur-xl border-2 border-emerald-400 rounded-3xl p-3.5 sm:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.85)]">
+                        <div class="flex flex-col sm:flex-row items-center gap-3.5 sm:gap-5">
+                            <div class="relative shrink-0">
+                                <img id="verifiedPhotoImg" src="" alt="Verified Staff" class="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl object-cover border-2 border-emerald-400 shadow-lg bg-slate-800">
+                                <span id="verifiedStatusIcon" class="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm border-2 border-slate-950 shadow">
+                                    <i class="fa-solid fa-check"></i>
+                                </span>
+                            </div>
+
+                            <div class="flex-1 text-center sm:text-left min-w-0 w-full">
+                                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
+                                    <span id="verifiedPunchTypeBadge" class="px-3 py-1 rounded-full text-xs sm:text-sm font-black bg-emerald-500 text-slate-950 shadow">
+                                        🟢 IN-TIME Successful
+                                    </span>
+                                    <span id="verifiedPunctualityBadge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                        ⭐ On-Time
+                                    </span>
+                                </div>
+
+                                <h2 id="verifiedTeacherName" class="text-lg sm:text-2xl font-black text-white truncate mt-1">
+                                    Staff Name
+                                </h2>
+                                <p id="verifiedTeacherRole" class="text-xs sm:text-sm text-slate-300 font-medium">
+                                    Role • ID: XXX
+                                </p>
+
+                                <div id="verifiedTimeBanner" class="mt-2.5 bg-slate-900/95 border border-slate-800 rounded-2xl px-3.5 py-2 flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fa-regular fa-clock text-emerald-400 text-sm"></i>
+                                        <span class="text-xs text-slate-300">Recorded Time:</span>
+                                        <span id="verifiedExactTime" class="text-sm sm:text-base font-black font-mono text-emerald-300">00:00:00</span>
+                                    </div>
+                                    <span id="verifiedSubMessage" class="text-[11px] font-bold text-emerald-400">
+                                        ✓ Identity Verified
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANUAL ACTION BUTTONS -->
+            <div class="bg-slate-900/95 border border-slate-800 rounded-2xl p-2.5 sm:p-3 shadow-xl flex flex-col gap-2 relative z-10">
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                    <button onclick="triggerKioskAttendanceNow(false)" class="sm:col-span-8 bg-gradient-to-r from-emerald-500 via-emerald-600 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.99] text-slate-950 font-black py-3 px-4 rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2.5 text-sm sm:text-base transition">
+                        <i class="fa-solid fa-camera text-lg"></i>
+                        <span>📸 Instant Face Scan & Punch</span>
+                    </button>
+
+                    <button onclick="toggleEmergencyOutMode()" id="emergencyOutToggleBtn" class="sm:col-span-4 bg-slate-800 hover:bg-rose-950/80 border border-slate-700 hover:border-rose-500/50 text-slate-300 hover:text-rose-200 font-bold py-3 px-3 rounded-xl flex items-center justify-center gap-2 text-xs sm:text-sm transition">
+                        <i class="fa-solid fa-person-walking-dashed-line-arrow-right text-rose-400"></i>
+                        <span id="emergencyBtnText">Emergency OUT Mode</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- RECEPTIONIST PORTAL (ADD STAFF) -->
+    <div id="receptionistPortalModal" class="hidden fixed inset-0 bg-slate-950/98 backdrop-blur-md z-50 flex items-center justify-center p-4 overflow-y-auto pt-10 pb-10">
+        <div class="bg-slate-900 border-2 border-emerald-500/50 rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl smooth-card-enter space-y-5 my-auto relative">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i class="fa-solid fa-user-plus text-xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm sm:text-lg font-black text-white">Staff Registration Portal</h3>
+                        <p class="text-[11px] text-slate-400">Salaries & Payroll are strictly hidden from this view.</p>
+                    </div>
+                </div>
+                <button onclick="closeReceptionistPortal()" class="text-slate-400 hover:text-white text-2xl">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                <!-- Left: WhatsApp Reports -->
+                <div class="lg:col-span-5 space-y-4">
+                    <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h4 class="text-xs font-black text-emerald-400 uppercase"><i class="fa-brands fa-whatsapp mr-1"></i> Send Attendance Report</h4>
+                        <div class="space-y-2">
+                            <div>
+                                <label class="text-[10px] text-slate-400 block mb-0.5">Admin 1 WhatsApp:</label>
+                                <input type="text" id="repWhatsapp1" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white">
+                                <button onclick="sendWhatsAppToAdmin(1)" class="w-full mt-1.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1"><i class="fa-brands fa-whatsapp"></i> Send to Admin 1</button>
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-slate-400 block mb-0.5">Admin 2 WhatsApp:</label>
+                                <input type="text" id="repWhatsapp2" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white">
+                                <button onclick="sendWhatsAppToAdmin(2)" class="w-full mt-1.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow flex items-center justify-center gap-1"><i class="fa-brands fa-whatsapp"></i> Send to Admin 2</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Staff Enrolment -->
+                <div class="lg:col-span-7 bg-slate-950 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <div class="border-b border-slate-800 pb-2">
+                        <h4 class="text-sm font-black text-indigo-400 uppercase"><i class="fa-solid fa-face-viewfinder mr-1"></i> Register New Staff</h4>
+                        <p class="text-[10px] text-slate-400 mt-1">Capture facial biometrics. Shift timings and salary must be set later by Admin.</p>
+                    </div>
+
+                    <form onsubmit="handleReceptionistAddStaff(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-300 mb-1">Staff Full Name *</label>
+                            <input type="text" id="recStaffName" required placeholder="e.g. Mrs. Priya Sharma" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-300 mb-1">Category</label>
+                                <select id="recStaffCategory" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                                    <option value="TEACHER">Teacher</option>
+                                    <option value="DRIVER">Driver</option>
+                                    <option value="STAFF">Working Staff</option>
+                                    <option value="MAID">Maid</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-300 mb-1">Role / Designation *</label>
+                                <input type="text" id="recStaffRole" required placeholder="e.g. Science PGT" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none">
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 border border-slate-700 rounded-xl p-5 text-center space-y-4 relative">
+                            <span class="text-xs font-bold text-emerald-400"><i class="fa-solid fa-camera"></i> Live Deep Biometric Face Scan</span>
+                            
+                            <!-- Dedicated Reception Front Camera -->
+                            <div class="relative w-40 h-40 sm:w-48 sm:h-48 mx-auto rounded-full overflow-hidden border-4 border-slate-700 bg-slate-950 flex items-center justify-center shadow-2xl">
+                                <video id="recVideo" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover mirror-video hidden"></video>
+                                
+                                <svg class="absolute inset-0 w-full h-full transform -rotate-90 pointer-events-none z-20" viewBox="0 0 100 100">
+                                    <circle cx="50" cy="50" r="46" fill="none" stroke="transparent" stroke-width="8"></circle>
+                                    <circle id="scanProgressCircle" cx="50" cy="50" r="46" fill="none" stroke="#10b981" stroke-width="8" stroke-dasharray="289" stroke-dashoffset="289" stroke-linecap="round"></circle>
+                                </svg>
+                                
+                                <img id="recScanPreviewImg" src="" class="absolute inset-0 w-full h-full object-cover hidden z-10">
+                                <i id="recScanPlaceholderIcon" class="fa-solid fa-user text-6xl text-slate-600"></i>
+                                
+                                <!-- No blur here to keep HD camera clear during scan -->
+                                <div id="scanPercentOverlay" class="hidden absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+                                    <span id="scanPercentText" class="text-emerald-400 font-black text-4xl shadow-xl drop-shadow-[0_0_8px_rgba(0,0,0,1)] bg-slate-950/40 px-3 py-1 rounded-full">0%</span>
+                                </div>
+                            </div>
+                            <p class="text-[11px] text-slate-400">Keep face centered. The 10-second deep scan builds a complete profile.</p>
+                        </div>
+
+                        <button type="button" id="recCaptureBtn" onclick="startReceptionistCapture()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black rounded-xl text-sm shadow-lg transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-face-viewfinder"></i> Start 10s Deep Scan
+                        </button>
+                        <button type="submit" id="recSaveBtn" class="hidden w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-slate-950 font-black rounded-xl text-sm shadow-lg hover:from-emerald-400 transition flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-check-double"></i> Save & Register Staff
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADMIN DASHBOARD PAGE -->
+    <div id="adminDashboardPage" class="hidden flex-1 flex flex-col min-h-screen bg-slate-950">
+        <header class="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3 sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg">
+                        <i class="fa-solid fa-shield-halved text-lg"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-sm sm:text-lg font-black text-white">Admin & Payroll Dashboard</h1>
+                            <span class="px-2 py-0.5 text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full">
+                                🔓 UNLOCKED
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-400">Manage Attendance, Salaries, Staff Configs & Calendar</p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                    <div class="flex flex-wrap items-center justify-center bg-slate-800 p-1.5 rounded-xl border border-slate-700 gap-1.5 w-full sm:w-auto">
+                        <button onclick="switchAdminSubTab('register')" id="adminTabBtn-register" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow transition whitespace-nowrap">
+                            <i class="fa-solid fa-book-open-reader mr-1"></i> Register
+                        </button>
+                        <button onclick="switchAdminSubTab('salary')" id="adminTabBtn-salary" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap">
+                            <i class="fa-solid fa-indian-rupee-sign mr-1"></i> Monthly Payroll
+                        </button>
+                        <button onclick="switchAdminSubTab('staff')" id="adminTabBtn-staff" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap">
+                            <i class="fa-solid fa-user-gear mr-1"></i> Staff Search
+                        </button>
+                        <button onclick="switchAdminSubTab('whatsapp')" id="adminTabBtn-whatsapp" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap">
+                            <i class="fa-brands fa-whatsapp text-emerald-400 mr-1"></i> WhatsApp
+                        </button>
+                        <button onclick="switchAdminSubTab('calendar')" id="adminTabBtn-calendar" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap">
+                            <i class="fa-regular fa-calendar-days text-sky-400 mr-1"></i> Calendar
+                        </button>
+                        <button onclick="switchAdminSubTab('settings')" id="adminTabBtn-settings" class="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap">
+                            <i class="fa-solid fa-sliders mr-1"></i> Settings
+                        </button>
+                    </div>
+
+                    <button onclick="lockAdminAndReturnToKiosk()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs sm:text-sm font-extrabold shadow-lg flex items-center gap-1.5 transition ml-auto sm:ml-0">
+                        <i class="fa-solid fa-lock"></i>
+                        <span class="hidden sm:inline">Lock System</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 space-y-5">
+            <!-- Top Stats -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow">
+                    <div class="text-xs text-slate-400 font-semibold">Total Staff</div>
+                    <div id="adminStatTotal" class="text-2xl font-black text-white mt-1">0</div>
+                </div>
+                <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-2xl p-3.5 shadow">
+                    <div class="text-xs text-emerald-300 font-semibold">🟢 On-Time</div>
+                    <div id="adminStatOnTime" class="text-2xl font-black text-emerald-400 mt-1">0</div>
+                </div>
+                <div class="bg-amber-950/40 border border-amber-500/30 rounded-2xl p-3.5 shadow">
+                    <div class="text-xs text-amber-300 font-semibold">🟡 Late</div>
+                    <div id="adminStatLate" class="text-2xl font-black text-amber-400 mt-1">0</div>
+                </div>
+                <div class="bg-rose-950/40 border border-rose-500/30 rounded-2xl p-3.5 shadow">
+                    <div class="text-xs text-rose-300 font-semibold">🔴 Checked Out</div>
+                    <div id="adminStatOut" class="text-2xl font-black text-rose-400 mt-1">0</div>
+                </div>
+                <div class="bg-sky-950/40 border border-sky-500/30 rounded-2xl p-3.5 col-span-2 sm:col-span-1 shadow">
+                    <div class="text-xs text-sky-300 font-semibold">🏖️ On Leave</div>
+                    <div id="adminStatLeave" class="text-2xl font-black text-sky-400 mt-1">0</div>
+                </div>
+            </div>
+
+            <!-- Daily Register Tab -->
+            <div id="adminSubTab-register" class="bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div>
+                        <h2 class="text-sm sm:text-xl font-black text-white flex items-center gap-2">
+                            <i class="fa-solid fa-book-open-reader text-emerald-400"></i>
+                            Daily Attendance Register
+                        </h2>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="attendanceCategoryFilter" onchange="renderAllViews()" class="bg-slate-950 border border-slate-700 text-xs font-bold text-white rounded-xl px-3 py-2">
+                            <option value="ALL">All Departments</option>
+                            <option value="TEACHER">Teachers</option>
+                            <option value="DRIVER">Drivers</option>
+                            <option value="STAFF">Working Staff</option>
+                            <option value="MAID">Maids</option>
+                        </select>
+                        <button onclick="exportAttendanceCSV()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow">
+                            <i class="fa-solid fa-file-excel"></i> Export Excel
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-slate-950 text-slate-400 text-[11px] uppercase border-b border-slate-800">
+                                <th class="py-3.5 px-4 font-bold">Staff Name & ID</th>
+                                <th class="py-3.5 px-4 font-bold">Status</th>
+                                <th class="py-3.5 px-4 font-bold">🟢 IN-TIME</th>
+                                <th class="py-3.5 px-4 font-bold">🔴 OUT-TIME</th>
+                                <th class="py-3.5 px-4 font-bold">Duration</th>
+                                <th class="py-3.5 px-4 text-right font-bold">Leave Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminRegisterTableBody" class="divide-y divide-slate-800/80 text-xs sm:text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Salary Payroll Tab (With Monthly Stats & PDF Export) -->
+            <div id="adminSubTab-salary" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div>
+                        <h2 class="text-sm sm:text-xl font-black text-white flex items-center gap-2">
+                            <i class="fa-solid fa-indian-rupee-sign text-emerald-400"></i>
+                            Confidential Monthly Payroll Report
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-1">Calculated based on actual Working Days from the Calendar.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportPayrollSalaryCSV()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-csv"></i> Excel
+                        </button>
+                        <button onclick="exportPayrollSalaryPDF()" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-extrabold shadow flex items-center gap-1.5">
+                            <i class="fa-solid fa-file-pdf"></i> Download PDF
+                        </button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                    <table class="w-full text-left border-collapse min-w-[800px]">
+                        <thead>
+                            <tr class="bg-slate-950 text-slate-400 text-[11px] uppercase border-b border-slate-800">
+                                <th class="py-3.5 px-4 font-bold">Staff Name & ID</th>
+                                <th class="py-3.5 px-4 font-bold">Base Salary</th>
+                                <th class="py-3.5 px-4 font-bold">Present</th>
+                                <th class="py-3.5 px-4 font-bold">Absent</th>
+                                <th class="py-3.5 px-4 font-bold">Half-Day</th>
+                                <th class="py-3.5 px-4 text-right font-bold">Net Payable (₹)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payrollTableBody" class="divide-y divide-slate-800/80 text-xs sm:text-sm"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- STAFF DIRECTORY, SALARY & TIMING SEARCH (ADMIN) -->
+            <div id="adminSubTab-staff" class="hidden space-y-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
+                    <div class="border-b border-slate-800 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <h3 class="text-base font-black text-white flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass text-emerald-400"></i>
+                                Search & Configure Staff Timing/Salary
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-0.5">Search by Unique ID (e.g. TCH-106) to securely define Salaries, Shift IN, and Shift OUT times.</p>
+                        </div>
+                        <div class="relative w-full sm:w-72">
+                            <input type="text" id="adminStaffSearchInput" onkeyup="filterAdminStaffList()" placeholder="Search Unique ID or Name..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-9 pr-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500 shadow-inner">
+                            <i class="fa-solid fa-search absolute left-3 top-3.5 text-slate-500"></i>
+                        </div>
+                    </div>
+                    
+                    <div id="adminStaffListGrid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 max-h-[60vh] overflow-y-auto pt-2 pb-4 pr-2">
+                        <!-- Dynamic Staff Cards will render here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- WhatsApp Tab -->
+            <div id="adminSubTab-whatsapp" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl space-y-5">
+                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <h2 class="text-sm sm:text-xl font-black text-white flex items-center gap-2">
+                        <i class="fa-brands fa-whatsapp text-emerald-400 text-lg"></i>
+                        Automated Daily WhatsApp Reports
+                    </h2>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    <div class="lg:col-span-6 bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <h3 class="text-xs font-black text-emerald-400 uppercase">📱 Admin Contact Numbers</h3>
+                        <div>
+                            <label class="text-[10px] text-slate-400 block mb-1">Admin 1:</label>
+                            <input type="text" id="adminWhatsapp1" placeholder="9876543210" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white mb-2">
+                            <label class="text-[10px] text-slate-400 block mb-1">Admin 2:</label>
+                            <input type="text" id="adminWhatsapp2" placeholder="9876543211" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white">
+                        </div>
+                        <button onclick="saveAdminWhatsappNumbers()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow">Save Configuration</button>
+                    </div>
+                    <div class="lg:col-span-6 bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
+                        <div id="whatsappPreviewBox" class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-[11px] font-mono text-slate-200 whitespace-pre-wrap max-h-48 overflow-y-auto mb-2"></div>
+                        <div class="flex gap-2">
+                            <button onclick="sendWhatsAppToAdmin(1)" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow">Send Admin 1</button>
+                            <button onclick="sendWhatsAppToAdmin(2)" class="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow">Send Admin 2</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar Holidays Tab -->
+            <div id="adminSubTab-calendar" class="hidden space-y-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4 mb-4">
+                        <div>
+                            <h3 class="text-base sm:text-xl font-black text-white flex items-center gap-2">
+                                <i class="fa-regular fa-calendar-days text-sky-400"></i> Monthly Holiday Calendar
+                            </h3>
+                            <p class="text-[11px] text-slate-400 mt-1">Click any date to mark it as a Holiday. Sundays are automatically off. This affects monthly payroll calculation.</p>
+                        </div>
+                        <div class="flex items-center gap-4 bg-slate-950 border border-slate-800 px-4 py-2 rounded-xl">
+                            <button onclick="changeCalendarMonth(-1)" class="text-slate-400 hover:text-white transition"><i class="fa-solid fa-chevron-left"></i></button>
+                            <span id="calMonthYear" class="font-black text-white min-w-[120px] text-center">October 2026</span>
+                            <button onclick="changeCalendarMonth(1)" class="text-slate-400 hover:text-white transition"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-7 gap-2 mb-2">
+                        <div class="text-center text-[10px] font-black uppercase text-rose-400">Sun</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Mon</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Tue</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Wed</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Thu</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Fri</div>
+                        <div class="text-center text-[10px] font-black uppercase text-slate-400">Sat</div>
+                    </div>
+                    
+                    <div id="calendarDaysGrid" class="grid grid-cols-7 gap-2">
+                        <!-- Dynamically filled calendar -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="adminSubTab-settings" class="hidden bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-5 max-w-2xl">
+                <div class="border-b border-slate-800 pb-3 flex items-center justify-between">
+                    <h3 class="text-sm sm:text-lg font-black text-white">System Settings</h3>
+                    <button onclick="saveAdminSettings()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black rounded-xl shadow">Save Changes</button>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <label class="text-xs sm:text-sm font-extrabold text-amber-400 block">Change Admin 6-Digit PIN:</label>
+                        <input type="password" id="settingAdminPinInput" maxlength="6" value="123456" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white">
+                    </div>
+                    <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                        <label class="text-xs sm:text-sm font-extrabold text-emerald-400 block">Change Reception 4-Digit PIN:</label>
+                        <input type="password" id="settingReceptionistPinInput" maxlength="4" value="4321" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm font-mono text-white">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                    <label class="text-xs sm:text-sm font-extrabold text-emerald-400 block">Default OUT Cooldown Lock (Minutes):</label>
+                    <div class="grid grid-cols-5 gap-2">
+                        <button onclick="updateCooldownMinutes(2)" id="cdBtn-2" class="py-2 rounded-xl text-xs font-bold border bg-slate-900 text-slate-300">2m</button>
+                        <button onclick="updateCooldownMinutes(5)" id="cdBtn-5" class="py-2 rounded-xl text-xs font-bold border bg-slate-900 text-slate-300">5m</button>
+                        <button onclick="updateCooldownMinutes(15)" id="cdBtn-15" class="py-2 rounded-xl text-xs font-bold border bg-slate-900 text-slate-300">15m</button>
+                        <button onclick="updateCooldownMinutes(30)" id="cdBtn-30" class="py-2 rounded-xl text-xs font-bold border bg-emerald-500 text-slate-950 shadow">30m</button>
+                        <button onclick="updateCooldownMinutes(60)" id="cdBtn-60" class="py-2 rounded-xl text-xs font-bold border bg-slate-900 text-slate-300">60m</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin PIN Modal (6-Digit) -->
+    <div id="adminPinModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-indigo-500/50 rounded-3xl max-w-sm w-full p-5 shadow-2xl smooth-card-enter">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 class="text-sm font-black text-white">Admin Dashboard Login</h3>
+                <button onclick="closeAdminPinModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="py-4 text-center space-y-3">
+                <input type="password" id="pinInputField" maxlength="6" placeholder="••••••" class="w-48 text-center text-2xl tracking-[0.4em] font-mono font-black bg-slate-950 border-2 border-slate-700 rounded-2xl py-2 text-white focus:outline-none">
+                <div id="pinErrorMsg" class="hidden text-xs font-bold text-rose-400">Incorrect PIN!</div>
+                <div class="grid grid-cols-3 gap-2 max-w-[240px] mx-auto pt-2">
+                    <button onclick="appendPinDigit('1')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">1</button>
+                    <button onclick="appendPinDigit('2')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">2</button>
+                    <button onclick="appendPinDigit('3')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">3</button>
+                    <button onclick="appendPinDigit('4')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">4</button>
+                    <button onclick="appendPinDigit('5')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">5</button>
+                    <button onclick="appendPinDigit('6')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">6</button>
+                    <button onclick="appendPinDigit('7')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">7</button>
+                    <button onclick="appendPinDigit('8')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">8</button>
+                    <button onclick="appendPinDigit('9')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">9</button>
+                    <button onclick="clearPinDigits()" class="py-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-bold">Clear</button>
+                    <button onclick="appendPinDigit('0')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">0</button>
+                    <button onclick="verifyAdminPin()" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs">Enter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Receptionist PIN Modal (4-Digit) -->
+    <div id="receptionistPinModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-emerald-500/50 rounded-3xl max-w-sm w-full p-5 shadow-2xl smooth-card-enter">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 class="text-sm font-black text-white">Reception Staff Login</h3>
+                <button onclick="closeReceptionistPinModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="py-4 text-center space-y-3">
+                <input type="password" id="repPinInputField" maxlength="4" placeholder="••••" class="w-40 text-center text-2xl tracking-[0.5em] font-mono font-black bg-slate-950 border-2 border-slate-700 rounded-2xl py-2 text-white focus:outline-none">
+                <div id="repPinErrorMsg" class="hidden text-xs font-bold text-rose-400">Incorrect PIN!</div>
+                <div class="grid grid-cols-3 gap-2 max-w-[240px] mx-auto pt-2">
+                    <button onclick="appendRepPinDigit('1')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">1</button>
+                    <button onclick="appendRepPinDigit('2')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">2</button>
+                    <button onclick="appendRepPinDigit('3')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">3</button>
+                    <button onclick="appendRepPinDigit('4')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">4</button>
+                    <button onclick="appendRepPinDigit('5')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">5</button>
+                    <button onclick="appendRepPinDigit('6')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">6</button>
+                    <button onclick="appendRepPinDigit('7')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">7</button>
+                    <button onclick="appendRepPinDigit('8')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">8</button>
+                    <button onclick="appendRepPinDigit('9')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">9</button>
+                    <button onclick="clearRepPinDigits()" class="py-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-900 text-rose-300 text-xs font-bold">Clear</button>
+                    <button onclick="appendRepPinDigit('0')" class="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold">0</button>
+                    <button onclick="verifyReceptionistPin()" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs">Enter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CUSTOM HOLIDAY MODAL (Fix for Preview Prompt/Confirm) -->
+    <div id="holidayModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900 border-2 border-sky-500/50 rounded-3xl max-w-sm w-full p-5 shadow-2xl smooth-card-enter">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 class="text-sm font-black text-white" id="holidayModalTitle">Manage Holiday</h3>
+                <button onclick="closeHolidayModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="py-4 space-y-4">
+                <p id="holidayModalText" class="text-xs text-slate-300"></p>
+                <input type="text" id="holidayNameInput" placeholder="e.g. Diwali, Sudden Off" class="hidden w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500">
+                <div class="flex gap-2" id="holidayModalActions">
+                    <!-- Buttons injected dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toasts -->
+    <div id="toastContainer" class="fixed top-16 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-3"></div>
+
+    <script>
+        // Data & Initialization
+        const INITIAL_STAFF_5 = [
+            { id: 'TCH-101', name: 'Mr. Kapil Jain', category: 'TEACHER', role: 'Senior Teacher - Math', salary: 35000, shiftIn: '07:30', shiftOut: '14:30', grace: 30, bgHex: '#1e3a8a', accentHex: '#38bdf8', featureSeed: 1 },
+            { id: 'TCH-102', name: 'Mrs. Deepti Ma\'am', category: 'TEACHER', role: 'Senior Teacher - English', salary: 32000, shiftIn: '07:30', shiftOut: '14:30', grace: 30, bgHex: '#991b1b', accentHex: '#fca5a5', featureSeed: 2 },
+            { id: 'TCH-103', name: 'Mrs. Sunita Verma', category: 'TEACHER', role: 'Lecturer - Hindi', salary: 28000, shiftIn: '07:30', shiftOut: '14:30', grace: 30, bgHex: '#701a75', accentHex: '#f472b6', featureSeed: 3 },
+            { id: 'TCH-104', name: 'Mr. Rajesh Sharma', category: 'TEACHER', role: 'Teacher - Science', salary: 25000, shiftIn: '07:30', shiftOut: '14:30', grace: 30, bgHex: '#065f46', accentHex: '#34d399', featureSeed: 4 },
+            { id: 'TCH-105', name: 'Ramesh (Driver)', category: 'DRIVER', role: 'School Bus Driver', salary: 15000, shiftIn: '06:30', shiftOut: '15:30', grace: 15, bgHex: '#312e81', accentHex: '#818cf8', featureSeed: 5 }
+        ];
+
+        let staffList = [];
+        let attendanceRecords = {};
+        let adminWhatsappNumbers = { w1: '9876543210', w2: '9876543211' };
+        let schoolHolidays = { "2026-10-02": "Gandhi Jayanti", "2026-10-31": "Diwali" };
+        
+        let selectedStaffId = 'TCH-101';
+        let autoDetectionEnabled = false; // Default OFF
+        let emergencyOutMode = false;
+        let audioMuted = false;
+        let settingsDrawerOpen = false;
+
+        let schoolSettings = { cooldownMinutes: 30, adminPin: '123456', receptionistPin: '4321' };
+
+        let mediaStream = null;
+        let usingLiveCamera = false;
+        let gazeStabilityCount = 0;
+        let isCountingDown = false;
+        let scannerPauseUntil = 0;
+        let overlayHideTimer = null;
+        let audioCtx = null;
+        let recMediaStream = null;
+        
+        // Calendar logic
+        let currentCalendarDate = new Date(2026, 9, 1); // Defaults to Oct 2026
+        let currentEditingHolidayDate = null; // For modal
+
+        // Virtual Avatar Generator for Offline Simulator
+        function generateStaffMultiAnglePhotos(name, bgHex, accentHex, seed) {
+            const photos = [];
+            for (let angle = 0; angle < 1; angle++) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 260; canvas.height = 260;
+                const ctx = canvas.getContext('2d');
+                const grad = ctx.createLinearGradient(0, 0, 260, 260);
+                grad.addColorStop(0, bgHex); grad.addColorStop(1, '#0f172a');
+                ctx.fillStyle = grad; ctx.fillRect(0, 0, 260, 260);
+
+                ctx.fillStyle = accentHex + '35'; ctx.beginPath(); ctx.arc(130, 115, 82, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(130, 95, 38, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = '#0f172a'; const eyeOffset = seed % 3; ctx.beginPath(); ctx.arc(118 + eyeOffset, 85, 5, 0, Math.PI * 2); ctx.arc(142 - eyeOffset, 85, 5, 0, Math.PI * 2); ctx.fill();
+                
+                ctx.fillStyle = 'rgba(2, 6, 23, 0.9)'; ctx.fillRect(0, 212, 260, 48);
+                ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(`${name.split('(')[0].trim().slice(0, 18)}`, 130, 241);
+                photos.push(canvas.toDataURL('image/png', 1.0)); // Use PNG for high quality
+            }
+            return photos;
+        }
+
+        function playBeep(freq = 880, duration = 0.14, type = 'sine') {
+            if (audioMuted) return;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.18, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + duration);
+            } catch (e) {}
+        }
+
+        // Camera Management Engine
+        async function initFrontCamera() {
+            const videoEl = document.getElementById('kioskVideo');
+            const simCanvas = document.getElementById('simulatorCanvas');
+            const sourceLabel = document.getElementById('cameraSourceLabel');
+            const warn = document.getElementById('secureContextWarning');
+            stopReceptionCamera(); 
+
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+                    videoEl.srcObject = mediaStream;
+                    await videoEl.play();
+                    usingLiveCamera = true;
+                    videoEl.classList.remove('hidden'); simCanvas.classList.add('hidden');
+                    sourceLabel.innerHTML = 'Switch Camera Mode<br><span class="text-[10px] text-slate-400 font-normal">(Webcam Active)</span>';
+                    if (warn) warn.classList.add('hidden');
+                    return;
+                } catch (err) { enableVirtualSimulatorCamera(); }
+            } else { enableVirtualSimulatorCamera(); }
+        }
+
+        function enableVirtualSimulatorCamera() {
+            usingLiveCamera = false;
+            const videoEl = document.getElementById('kioskVideo'); const simCanvas = document.getElementById('simulatorCanvas');
+            const sourceLabel = document.getElementById('cameraSourceLabel');
+            if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+            videoEl.classList.add('hidden'); simCanvas.classList.remove('hidden');
+            sourceLabel.innerHTML = 'Switch Camera Mode<br><span class="text-[10px] text-slate-400 font-normal">(Simulator Active)</span>';
+            const warn = document.getElementById('secureContextWarning');
+            if(warn) warn.classList.remove('hidden');
+        }
+
+        function stopMainCamera() {
+            if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+            usingLiveCamera = false;
+        }
+
+        function switchCameraSource() {
+            if (usingLiveCamera) { enableVirtualSimulatorCamera(); showToast('Switched to Simulator Mode', 'info'); } 
+            else { initFrontCamera(); }
+        }
+        function requestCameraPermissionsManually() { initFrontCamera(); }
+
+        async function startReceptionCamera() {
+            stopMainCamera(); 
+            const recVid = document.getElementById('recVideo');
+            const placeholder = document.getElementById('recScanPlaceholderIcon');
+            try {
+                recMediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+                recVid.srcObject = recMediaStream;
+                await recVid.play();
+                recVid.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+            } catch (e) {
+                showToast("Camera access denied. Check browser permissions.", "out");
+            }
+        }
+
+        function stopReceptionCamera() {
+            if (recMediaStream) { recMediaStream.getTracks().forEach(t => t.stop()); recMediaStream = null; }
+            document.getElementById('recVideo').classList.add('hidden');
+            document.getElementById('recScanPlaceholderIcon').classList.remove('hidden');
+        }
+
+        // Full Screen Menu Toggle
+        function toggleSettingsMenu() {
+            settingsDrawerOpen = !settingsDrawerOpen;
+            const menu = document.getElementById('fullScreenSettingsMenu');
+            if (settingsDrawerOpen) {
+                stopMainCamera();
+                menu.classList.remove('hidden');
+            } else {
+                menu.classList.add('hidden');
+                initFrontCamera();
+            }
+        }
+
+        // Kiosk Drawing
+        let animPhase = 0;
+        function drawVirtualTeacherFace() {
+            const canvas = document.getElementById('simulatorCanvas');
+            if (!canvas || canvas.classList.contains('hidden')) return;
+            if (canvas.width !== 640) { canvas.width = 640; canvas.height = 480; }
+            const ctx = canvas.getContext('2d'); animPhase += 0.045;
+            const bgGrad = ctx.createLinearGradient(0, 0, 0, 480);
+            bgGrad.addColorStop(0, '#0f172a'); bgGrad.addColorStop(1, '#1e1b4b');
+            ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, 640, 480);
+
+            const staff = staffList.find(s => s.id === selectedStaffId) || staffList[0];
+            if (!staff) return;
+
+            const bobY = Math.sin(animPhase) * 4;
+            const halo = ctx.createRadialGradient(320, 220 + bobY, 20, 320, 220 + bobY, 170);
+            halo.addColorStop(0, staff.accentHex + '45'); halo.addColorStop(1, 'transparent');
+            ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(320, 220 + bobY, 170, 0, Math.PI * 2); ctx.fill();
+
+            ctx.fillStyle = staff.bgHex; ctx.beginPath(); ctx.arc(320, 420 + bobY, 135, Math.PI * 1.1, Math.PI * 1.9); ctx.fill();
+            ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(320, 195 + bobY, 68, 0, Math.PI * 2); ctx.fill();
+
+            const seed = staff.featureSeed || 1; const eyeShift = seed % 3;
+            ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(296 + eyeShift, 182, 6, 0, Math.PI * 2); ctx.arc(344 - eyeShift, 182, 6, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Attendance Logic
+        function runKioskPresenceLoop() {
+            const now = Date.now();
+            const progressBar = document.getElementById('gazeProgressBar');
+            const percentText = document.getElementById('gazePercentText');
+            const instructionText = document.getElementById('gazeInstructionText');
+
+            if (!usingLiveCamera) drawVirtualTeacherFace();
+
+            if (now < scannerPauseUntil) {
+                const waitSec = Math.ceil((scannerPauseUntil - now) / 1000);
+                progressBar.style.width = '100%'; percentText.textContent = `${waitSec}s`; instructionText.textContent = 'Identity Verified';
+                return;
+            }
+
+            if (isCountingDown) return;
+
+            let faceDetectedInFrame = true; // Simulated for demo
+            if (autoDetectionEnabled && faceDetectedInFrame) {
+                gazeStabilityCount++;
+                const pct = Math.min(100, Math.round((gazeStabilityCount / 14) * 100));
+                progressBar.style.width = `${pct}%`; percentText.textContent = `${pct}%`; instructionText.textContent = 'Scanning Biometrics...';
+                if (gazeStabilityCount >= 14) { gazeStabilityCount = 0; startPhotoCountdown(false); }
+            } else {
+                gazeStabilityCount = Math.max(0, gazeStabilityCount - 1);
+                progressBar.style.width = '0%'; percentText.textContent = 'READY'; instructionText.textContent = 'Awaiting Alignment';
+            }
+        }
+
+        function toggleAutoDetection() {
+            autoDetectionEnabled = !autoDetectionEnabled;
+            const btn = document.getElementById('autoDetectBtn'); const lbl = document.getElementById('autoDetectLabel');
+            lbl.textContent = autoDetectionEnabled ? 'Auto: ON' : 'Auto: OFF';
+            if (autoDetectionEnabled) { btn.className = 'bg-emerald-500/90 text-slate-950 font-extrabold px-2.5 py-1 rounded-lg text-[11px]'; } 
+            else { btn.className = 'bg-slate-800 text-slate-300 border border-slate-700 font-extrabold px-2.5 py-1 rounded-lg text-[11px]'; }
+            showToast(autoDetectionEnabled ? 'Auto Face Sensor Enabled' : 'Auto Sensor Disabled (Manual Only)', 'info');
+        }
+
+        function onKioskStaffChange() {
+            selectedStaffId = document.getElementById('kioskTestStaffSelect').value; scannerPauseUntil = Date.now() + 900;
+            drawVirtualTeacherFace();
+        }
+
+        function triggerKioskAttendanceNow(isEmergency = false) { scannerPauseUntil = 0; startPhotoCountdown(isEmergency || emergencyOutMode); }
+        function forceEmergencyEarlyOut() { scannerPauseUntil = 0; startPhotoCountdown(true); }
+
+        function toggleEmergencyOutMode(forceState = null) {
+            emergencyOutMode = forceState !== null ? forceState : !emergencyOutMode;
+            const btn = document.getElementById('emergencyOutToggleBtn'); const txt = document.getElementById('emergencyBtnText');
+            if (emergencyOutMode) { btn.className = 'sm:col-span-4 bg-rose-600 text-white font-black py-3 px-3 rounded-xl flex items-center justify-center gap-2 text-xs sm:text-sm shadow-lg transition'; txt.textContent = '🚨 Emergency OUT Active'; showToast('Emergency / Half-Day mode activated', 'out'); } 
+            else { btn.className = 'sm:col-span-4 bg-slate-800 hover:bg-rose-950/80 border border-slate-700 text-slate-300 font-bold py-3 px-3 rounded-xl flex items-center justify-center gap-2 text-xs sm:text-sm transition'; txt.textContent = 'Emergency OUT Mode'; }
+        }
+
+        function startPhotoCountdown(isForcedEarlyOut = false) {
+            if (isCountingDown) return;
+            isCountingDown = true;
+            const overlay = document.getElementById('countdownOverlay');
+            const numEl = document.getElementById('countdownNumber');
+            overlay.classList.remove('hidden');
+
+            let count = 2; numEl.textContent = count; playBeep(700, 0.1, 'sine');
+            const timer = setInterval(() => {
+                count--;
+                if (count > 0) { numEl.textContent = count; playBeep(750, 0.1, 'sine'); } 
+                else { clearInterval(timer); overlay.classList.add('hidden'); isCountingDown = false; executeSmartAttendancePunch(isForcedEarlyOut); }
+            }, 600);
+        }
+
+        function checkPunctualityStatus(nowDate, staff) {
+            const targetTime = staff.shiftIn || '07:30';
+            const [repHour, repMin] = targetTime.split(':').map(Number);
+            const grace = Number(staff.grace !== undefined ? staff.grace : 30);
+            const cutoffMinutes = repHour * 60 + repMin + grace;
+            const currentMinutes = nowDate.getHours() * 60 + nowDate.getMinutes();
+            return currentMinutes <= cutoffMinutes ? 'ON_TIME' : 'LATE';
+        }
+
+        function executeSmartAttendancePunch(forceEarlyOut = false) {
+            const staff = staffList.find(s => s.id === selectedStaffId) || staffList[0];
+            if (!staff) return;
+
+            const now = new Date(); const nowMs = now.getTime();
+            const timeFormatted = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            
+            let rec = attendanceRecords[staff.id] || { inTime: null, inTimestamp: null, outTime: null, outTimestamp: null, punctuality: 'ON_TIME', leaveStatus: null, isEarlyOut: false };
+            const cooldownMs = schoolSettings.cooldownMinutes * 60 * 1000;
+
+            if (!rec.inTime) {
+                triggerCameraFlashAndSound(1150);
+                const punctuality = checkPunctualityStatus(now, staff);
+                rec.inTime = timeFormatted; rec.inTimestamp = nowMs; rec.punctuality = punctuality; rec.leaveStatus = null;
+                attendanceRecords[staff.id] = rec; saveAllData();
+
+                scannerPauseUntil = nowMs + 5500;
+                showSmoothVerificationCard({ type: 'IN_SUCCESS', staff, timeStr: timeFormatted, punctuality, subMessage: `✓ IN-Punch Successful! (${schoolSettings.cooldownMinutes} min lock)` });
+                renderAllViews();
+                return;
+            }
+
+            if (rec.inTime && !rec.outTime) {
+                const elapsedMs = nowMs - (rec.inTimestamp || 0);
+                const remainingMins = Math.max(1, Math.ceil((cooldownMs - elapsedMs) / 60000));
+
+                if (elapsedMs < cooldownMs && !forceEarlyOut) {
+                    playBeep(420, 0.25, 'sawtooth'); scannerPauseUntil = nowMs + 6000;
+                    showSmoothVerificationCard({ type: 'COOLDOWN_LOCKED', staff, timeStr: `IN: ${rec.inTime}`, punctuality: rec.punctuality, subMessage: `🛡️ IN recorded! (OUT allowed in ${remainingMins} mins)` });
+                    return;
+                }
+
+                triggerCameraFlashAndSound(980);
+                rec.outTime = timeFormatted; rec.outTimestamp = nowMs; rec.isEarlyOut = Boolean(forceEarlyOut);
+                
+                const outTarget = staff.shiftOut || '14:30';
+                const [outHour, outMin] = outTarget.split(':').map(Number);
+                const outTargetMs = outHour * 60 + outMin;
+                const currentMs = now.getHours() * 60 + now.getMinutes();
+                if (currentMs < (outTargetMs - 60)) { rec.leaveStatus = 'HALF_DAY'; } 
+
+                attendanceRecords[staff.id] = rec; saveAllData();
+
+                if (emergencyOutMode) toggleEmergencyOutMode(false);
+                scannerPauseUntil = nowMs + 5500;
+                showSmoothVerificationCard({ type: 'OUT_SUCCESS', staff, timeStr: timeFormatted, punctuality: rec.punctuality, isEarlyOut: rec.isEarlyOut, subMessage: rec.leaveStatus === 'HALF_DAY' ? '⚠️ Half-Day Marked (Early Departure)' : `✓ OUT Successful! Total: ${formatDuration(rec)}` });
+                renderAllViews();
+                return;
+            }
+        }
+
+        function triggerCameraFlashAndSound(freq) {
+            const flashEl = document.getElementById('cameraFlashOverlay');
+            flashEl.classList.remove('flash-active'); void flashEl.offsetWidth; flashEl.classList.add('flash-active');
+            playBeep(freq, 0.16, 'triangle');
+        }
+
+        function showSmoothVerificationCard(data) {
+            const overlay = document.getElementById('smoothVerificationOverlay');
+            const photoImg = document.getElementById('verifiedPhotoImg'); const statusIcon = document.getElementById('verifiedStatusIcon');
+            const punchBadge = document.getElementById('verifiedPunchTypeBadge'); const punctualityBadge = document.getElementById('verifiedPunctualityBadge');
+            const nameEl = document.getElementById('verifiedTeacherName'); const roleEl = document.getElementById('verifiedTeacherRole');
+            const timeEl = document.getElementById('verifiedExactTime'); const subMsgEl = document.getElementById('verifiedSubMessage');
+
+            if (overlayHideTimer) clearTimeout(overlayHideTimer);
+            const staffPhotos = data.staff.photos || [data.staff.photo]; photoImg.src = staffPhotos[0];
+            nameEl.textContent = data.staff.name; roleEl.textContent = `${data.staff.role} • ID: ${data.staff.id}`;
+            timeEl.textContent = data.timeStr; subMsgEl.textContent = data.subMessage;
+
+            if (data.punctuality === 'LATE') { punctualityBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40'; punctualityBadge.textContent = '🟡 Late Arrival'; } 
+            else { punctualityBadge.className = 'px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'; punctualityBadge.textContent = '⭐ On-Time'; }
+
+            if (data.type === 'IN_SUCCESS') {
+                punchBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-black bg-emerald-500 text-slate-950 shadow'; punchBadge.textContent = '🟢 IN-TIME Successful';
+                statusIcon.className = 'absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm border-2 border-slate-950 shadow'; statusIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+            } else if (data.type === 'COOLDOWN_LOCKED') {
+                punchBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-black bg-amber-400 text-slate-950 shadow'; punchBadge.textContent = '🛡️ OUT Locked (Cooldown)';
+                statusIcon.innerHTML = '<i class="fa-solid fa-lock"></i>';
+            } else if (data.type === 'OUT_SUCCESS') {
+                punchBadge.className = 'px-3 py-1 rounded-full text-xs sm:text-sm font-black bg-rose-500 text-white shadow'; punchBadge.textContent = data.isEarlyOut ? '🔴 Half-Day / Early Out' : '🔴 OUT-TIME Successful';
+                statusIcon.innerHTML = '<i class="fa-solid fa-person-walking-arrow-right"></i>';
+            }
+            overlay.classList.remove('hidden'); overlayHideTimer = setTimeout(() => overlay.classList.add('hidden'), 5500);
+        }
+
+        // PIN MODALS
+        function openAdminPinModal() { if (settingsDrawerOpen) { toggleSettingsMenu(); } document.getElementById('pinInputField').value = ''; document.getElementById('pinErrorMsg').classList.add('hidden'); document.getElementById('adminPinModal').classList.remove('hidden'); }
+        function closeAdminPinModal() { document.getElementById('adminPinModal').classList.add('hidden'); if (!document.getElementById('publicKioskPage').classList.contains('hidden')) { initFrontCamera(); } }
+        function appendPinDigit(digit) { const input = document.getElementById('pinInputField'); if (input.value.length < 6) { input.value += digit; playBeep(900, 0.06, 'sine'); if (input.value.length === 6) setTimeout(verifyAdminPin, 180); } }
+        function clearPinDigits() { document.getElementById('pinInputField').value = ''; document.getElementById('pinErrorMsg').classList.add('hidden'); }
+        function verifyAdminPin() {
+            const entered = document.getElementById('pinInputField').value.trim();
+            if (entered === schoolSettings.adminPin) {
+                playBeep(1200, 0.15, 'triangle'); closeAdminPinModal(); stopMainCamera();
+                document.getElementById('publicKioskPage').classList.add('hidden'); document.getElementById('adminDashboardPage').classList.remove('hidden');
+                renderAllViews(); showToast('🔓 Admin Dashboard Unlocked', 'success');
+            } else { playBeep(350, 0.25, 'sawtooth'); document.getElementById('pinErrorMsg').classList.remove('hidden'); document.getElementById('pinInputField').value = ''; }
+        }
+
+        function openReceptionistPinModal() { if (settingsDrawerOpen) { toggleSettingsMenu(); } document.getElementById('repPinInputField').value = ''; document.getElementById('repPinErrorMsg').classList.add('hidden'); document.getElementById('receptionistPinModal').classList.remove('hidden'); }
+        function closeReceptionistPinModal() { document.getElementById('receptionistPinModal').classList.add('hidden'); }
+        function appendRepPinDigit(digit) { const input = document.getElementById('repPinInputField'); if (input.value.length < 4) { input.value += digit; playBeep(900, 0.06, 'sine'); if (input.value.length === 4) setTimeout(verifyReceptionistPin, 180); } }
+        function clearRepPinDigits() { document.getElementById('repPinInputField').value = ''; document.getElementById('repPinErrorMsg').classList.add('hidden'); }
+        function verifyReceptionistPin() {
+            const entered = document.getElementById('repPinInputField').value.trim();
+            if (entered === schoolSettings.receptionistPin) {
+                playBeep(1100, 0.15, 'triangle'); closeReceptionistPinModal(); openReceptionistPortal(); showToast('🔓 Reception Portal Unlocked', 'success');
+            } else { playBeep(350, 0.25, 'sawtooth'); document.getElementById('repPinErrorMsg').classList.remove('hidden'); document.getElementById('repPinInputField').value = ''; }
+        }
+
+        // RECEPTION PORTAL (Staff Registration)
+        function openReceptionistPortal() { document.getElementById('repWhatsapp1').value = adminWhatsappNumbers.w1; document.getElementById('repWhatsapp2').value = adminWhatsappNumbers.w2; refreshReceptionistPreview(); document.getElementById('receptionistPortalModal').classList.remove('hidden'); startReceptionCamera(); }
+        
+        function closeReceptionistPortal() { 
+            document.getElementById('receptionistPortalModal').classList.add('hidden'); 
+            stopReceptionCamera(); initFrontCamera(); 
+            
+            tempCapturedPhotos = []; 
+            document.getElementById('recSaveBtn').classList.add('hidden'); 
+            document.getElementById('recCaptureBtn').classList.remove('hidden'); 
+            document.getElementById('recCaptureBtn').disabled = false; 
+            document.getElementById('recCaptureBtn').innerHTML = '<i class="fa-solid fa-face-viewfinder"></i> Start 10s Deep Scan'; 
+            document.getElementById('scanProgressCircle').style.transition = 'none'; 
+            document.getElementById('scanProgressCircle').style.strokeDashoffset = '289'; 
+            document.getElementById('scanPercentOverlay').classList.add('hidden'); 
+            document.getElementById('recScanPreviewImg').classList.add('hidden'); 
+            document.getElementById('recScanPlaceholderIcon').classList.remove('hidden'); 
+            document.getElementById('recStaffName').value = ''; 
+            document.getElementById('recStaffRole').value = ''; 
+        }
+
+        let tempCapturedPhotos = [];
+        async function startReceptionistCapture() {
+            const name = document.getElementById('recStaffName').value.trim();
+            const role = document.getElementById('recStaffRole').value.trim();
+            if(!name || !role) { showToast('Please enter Name and Role first!', 'out'); return; }
+            
+            const btn = document.getElementById('recCaptureBtn'); btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Biometric Mapping...';
+            const circle = document.getElementById('scanProgressCircle'); const percentText = document.getElementById('scanPercentText'); const percentOverlay = document.getElementById('scanPercentOverlay'); const previewImg = document.getElementById('recScanPreviewImg');
+            
+            previewImg.classList.add('hidden'); percentOverlay.classList.remove('hidden'); 
+            circle.style.transition = 'none'; circle.style.strokeDashoffset = '289'; percentText.textContent = '0%';
+            
+            await new Promise(r => setTimeout(r, 400));
+            circle.style.transition = 'stroke-dashoffset 0.1s linear';
+            let progress = 0; const totalScanTimeMs = 10000; const intervalMs = 100; const steps = totalScanTimeMs / intervalMs; const dashStep = 289 / steps;
+            
+            playBeep(600, 0.1);
+            const scanInterval = setInterval(() => {
+                progress++; const currentDash = 289 - (progress * dashStep); circle.style.strokeDashoffset = Math.max(0, currentDash);
+                const percentage = Math.min(100, Math.round((progress / steps) * 100)); percentText.textContent = `${percentage}%`;
+                if(progress % 10 === 0) playBeep(800 + Math.random()*200, 0.05);
+                if(progress >= steps) { clearInterval(scanInterval); finishReceptionistScan(); }
+            }, intervalMs);
+        }
+
+        function finishReceptionistScan() {
+            playBeep(1100, 0.2, 'square');
+            let photoData = "";
+            const recVid = document.getElementById('recVideo');
+            
+            if (recMediaStream && recVid.videoWidth > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = recVid.videoWidth; canvas.height = recVid.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+                ctx.drawImage(recVid, 0, 0, canvas.width, canvas.height);
+                photoData = canvas.toDataURL('image/png', 1.0);
+            } else {
+                const name = document.getElementById('recStaffName').value.trim() || 'Staff Member';
+                const seed = Math.floor(Math.random() * 50) + 1;
+                photoData = generateStaffMultiAnglePhotos(name, '#065f46', '#34d399', seed)[0];
+            }
+            
+            tempCapturedPhotos = [photoData];
+            const previewImg = document.getElementById('recScanPreviewImg'); const percentOverlay = document.getElementById('scanPercentOverlay');
+            percentOverlay.classList.add('hidden'); previewImg.src = photoData; previewImg.classList.remove('hidden');
+            document.getElementById('recCaptureBtn').classList.add('hidden'); document.getElementById('recSaveBtn').classList.remove('hidden');
+            showToast('Biometric HD Scan Complete!', 'success');
+        }
+
+        function handleReceptionistAddStaff(e) {
+            e.preventDefault();
+            if (tempCapturedPhotos.length < 1) { showToast('Please complete Biometric Scan first!', 'out'); return; }
+            const name = document.getElementById('recStaffName').value.trim(); const category = document.getElementById('recStaffCategory').value; const role = document.getElementById('recStaffRole').value.trim();
+            const newStaff = { id: `TCH-${100 + staffList.length + 1}`, name, category, role, salary: 0, shiftIn: '07:30', shiftOut: '14:30', grace: 30, bgHex: '#065f46', accentHex: '#34d399', featureSeed: Math.floor(Math.random() * 50) + 1, photos: tempCapturedPhotos };
+            staffList.unshift(newStaff); selectedStaffId = newStaff.id; saveAllData(); renderAllViews();
+            showToast(`✅ ${name} registered successfully! ID: ${newStaff.id}`, 'success');
+            setTimeout(() => closeReceptionistPortal(), 1500);
+        }
+
+        // WhatsApp Integrations
+        function generateItemizedWhatsappReportText() {
+            const nowStr = new Date().toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+            let onTimeList = [], lateList = [], absentList = [];
+            staffList.forEach(s => {
+                const r = attendanceRecords[s.id];
+                if (r && r.inTime) { if (r.punctuality === 'LATE') lateList.push(`• ${s.name} (${s.role}): ${r.inTime}`); else onTimeList.push(`• ${s.name} (${s.role}): ${r.inTime}`); } 
+                else { absentList.push(`• ${s.name} (${s.role})`); }
+            });
+            let text = `🏫 *Delhi School of Brilliants - Daily Report* 🏫\n📅 Date: ${nowStr}\n\n`;
+            text += `🟢 *On-Time:* (${onTimeList.length})\n` + (onTimeList.length ? onTimeList.join('\n') + '\n\n' : '_None_\n\n');
+            text += `🟡 *Late Arrivals:* (${lateList.length})\n` + (lateList.length ? lateList.join('\n') + '\n\n' : '_None_\n\n');
+            text += `🔴 *Absent / Pending:* (${absentList.length})\n` + (absentList.length ? absentList.join('\n') : '_All Present_');
+            return text;
+        }
+
+        function refreshReceptionistPreview() { const box = document.getElementById('receptionistWhatsappPreviewBox'); if (box) box.textContent = generateItemizedWhatsappReportText(); }
+        function refreshWhatsappPreview() { const box = document.getElementById('whatsappPreviewBox'); if (box) box.textContent = generateItemizedWhatsappReportText(); }
+
+        function sendWhatsAppToAdmin(adminIndex) {
+            const numKey = `w${adminIndex}`;
+            const number = document.getElementById(`repWhatsapp${adminIndex}`)?.value || document.getElementById(`adminWhatsapp${adminIndex}`)?.value || adminWhatsappNumbers[numKey];
+            if (!number) { showToast('Please enter a valid WhatsApp number!', 'info'); return; }
+            const reportText = generateItemizedWhatsappReportText(); const cleanNumber = number.replace(/\D/g, '');
+            const waUrl = `https://api.whatsapp.com/send?phone=${cleanNumber}&text=${encodeURIComponent(reportText)}`;
+            window.open(waUrl, '_blank'); showToast(`📤 Opening WhatsApp for Admin ${adminIndex}...`, 'success');
+        }
+
+        // Admin Functionalities
+        function lockAdminAndReturnToKiosk() { document.getElementById('adminDashboardPage').classList.add('hidden'); document.getElementById('publicKioskPage').classList.remove('hidden'); initFrontCamera(); scannerPauseUntil = Date.now() + 1500; showToast('🔒 System Locked', 'info'); }
+
+        function switchAdminSubTab(tabName) {
+            ['register', 'salary', 'whatsapp', 'settings', 'staff', 'calendar'].forEach(t => {
+                const section = document.getElementById(`adminSubTab-${t}`); const btn = document.getElementById(`adminTabBtn-${t}`);
+                if (!section || !btn) return;
+                if (t === tabName) { section.classList.remove('hidden'); btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white shadow transition whitespace-nowrap'; } 
+                else { section.classList.add('hidden'); btn.className = 'px-3 py-1.5 rounded-lg text-xs font-bold text-slate-300 hover:text-white transition whitespace-nowrap'; }
+            });
+            if (tabName === 'whatsapp') refreshWhatsappPreview();
+            if (tabName === 'calendar') renderAdminCalendar();
+        }
+
+        function formatDuration(rec) {
+            if (!rec || !rec.inTimestamp) return '—';
+            if (!rec.outTimestamp) return 'Present';
+            const diffSec = Math.max(1, Math.floor((rec.outTimestamp - rec.inTimestamp) / 1000));
+            const hrs = Math.floor(diffSec / 3600); const mins = Math.floor((diffSec % 3600) / 60);
+            return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        }
+
+        function markStaffLeave(staffId, leaveType) {
+            let rec = attendanceRecords[staffId] || {};
+            rec.leaveStatus = (rec.leaveStatus === leaveType) ? null : leaveType;
+            if (rec.leaveStatus) { rec.inTime = null; rec.outTime = null; }
+            attendanceRecords[staffId] = rec; saveAllData(); renderAllViews(); showToast(`Leave updated: ${leaveType}`, 'info');
+        }
+
+        function filterAdminStaffList() {
+            const term = document.getElementById('adminStaffSearchInput').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('.admin-staff-card');
+            cards.forEach(card => {
+                const text = card.getAttribute('data-search');
+                card.style.display = text.includes(term) ? 'flex' : 'none';
+            });
+        }
+
+        function saveStaffDetails(staffId) {
+            const staff = staffList.find(s => s.id === staffId);
+            if (!staff) return;
+            staff.salary = Number(document.getElementById(`edit_sal_${staffId}`).value) || 0;
+            staff.shiftIn = document.getElementById(`edit_in_${staffId}`).value || '07:30';
+            staff.shiftOut = document.getElementById(`edit_out_${staffId}`).value || '14:30';
+            staff.grace = Number(document.getElementById(`edit_grace_${staffId}`).value) || 0;
+            saveAllData(); renderAllViews(); showToast(`✅ Configuration Saved for ${staff.name}`, 'success');
+        }
+
+        // Calendar Engine with Custom UI Modal (Safe for Previews)
+        function changeCalendarMonth(offset) {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + offset);
+            renderAdminCalendar(); renderAllViews();
+        }
+
+        function toggleHoliday(dateStr, isSunday) {
+            if (isSunday) { showToast('Sundays are automatic weekly offs.', 'info'); return; }
+            
+            currentEditingHolidayDate = dateStr;
+            const modal = document.getElementById('holidayModal');
+            const title = document.getElementById('holidayModalTitle');
+            const text = document.getElementById('holidayModalText');
+            const input = document.getElementById('holidayNameInput');
+            const actions = document.getElementById('holidayModalActions');
+
+            input.value = '';
+            
+            if (schoolHolidays[dateStr]) {
+                title.textContent = 'Remove Holiday';
+                text.innerHTML = `Current Holiday: <b>${schoolHolidays[dateStr]}</b><br>Do you want to REMOVE this holiday and make it a Working Day?`;
+                input.classList.add('hidden');
+                actions.innerHTML = `
+                    <button onclick="closeHolidayModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Cancel</button>
+                    <button onclick="confirmRemoveHoliday()" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg transition">Remove Holiday</button>
+                `;
+            } else {
+                title.textContent = 'Add Holiday';
+                text.textContent = `Adding holiday for: ${new Date(dateStr).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                input.classList.remove('hidden');
+                actions.innerHTML = `
+                    <button onclick="closeHolidayModal()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition">Cancel</button>
+                    <button onclick="confirmAddHoliday()" class="flex-1 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-xs font-bold shadow-lg transition">Save Holiday</button>
+                `;
+            }
+            modal.classList.remove('hidden');
+            if(!input.classList.contains('hidden')) setTimeout(() => input.focus(), 100);
+        }
+
+        function closeHolidayModal() { document.getElementById('holidayModal').classList.add('hidden'); currentEditingHolidayDate = null; }
+
+        function confirmAddHoliday() {
+            const reason = document.getElementById('holidayNameInput').value.trim();
+            if (reason) { schoolHolidays[currentEditingHolidayDate] = reason; showToast(`Holiday Added: ${reason}`, 'success'); finalizeHolidayChange(); } 
+            else { showToast('Please enter a holiday name', 'out'); }
+        }
+
+        function confirmRemoveHoliday() {
+            delete schoolHolidays[currentEditingHolidayDate]; showToast('Holiday Removed! Back to Working Day.', 'info'); finalizeHolidayChange();
+        }
+
+        function finalizeHolidayChange() {
+            closeHolidayModal(); saveAllData(); renderAdminCalendar(); renderAllViews();
+        }
+
+        function renderAdminCalendar() {
+            const grid = document.getElementById('calendarDaysGrid');
+            if(!grid) return;
+            
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            
+            document.getElementById('calMonthYear').textContent = `${monthNames[month]} ${year}`;
+            
+            let html = '';
+            for(let i=0; i<firstDay; i++) { html += `<div></div>`; }
+            
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dateObj = new Date(year, month, d);
+                const isSunday = dateObj.getDay() === 0;
+                
+                const holidayName = schoolHolidays[dateStr];
+                const isHoliday = isSunday || holidayName;
+                
+                let bgClass = isHoliday ? 'bg-rose-950/40 border-rose-500/30 text-rose-300' : 'bg-slate-900 border-slate-700 hover:border-emerald-500 text-slate-200';
+                let label = holidayName ? holidayName : (isSunday ? 'Sunday Off' : 'Working Day');
+                
+                html += `
+                <div onclick="toggleHoliday('${dateStr}', ${isSunday})" class="p-2 border rounded-xl flex flex-col items-center justify-center text-center cursor-pointer transition ${bgClass} min-h-[80px] shadow-sm">
+                    <span class="text-lg font-black">${d}</span>
+                    <span class="text-[9px] font-bold mt-1 leading-tight px-1">${label}</span>
+                </div>
+                `;
+            }
+            grid.innerHTML = html;
+        }
+
+        // Monthly Payroll Engine
+        function getMonthlyPayrollStats(staffId, baseSalary) {
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            let totalWorkingDays = 0;
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dateObj = new Date(year, month, d);
+                if(dateObj.getDay() !== 0 && !schoolHolidays[dateStr]) totalWorkingDays++;
+            }
+            if (totalWorkingDays === 0) totalWorkingDays = 24; 
+            
+            const rec = attendanceRecords[staffId];
+            let present = totalWorkingDays - 2; let absent = 1; let halfDay = 1;
+
+            if (rec && rec.inTime) {
+                if (rec.leaveStatus === 'HALF_DAY' || rec.isEarlyOut) halfDay += 1;
+                else if (!rec.leaveStatus) present += 1;
+            } else if (rec && (rec.leaveStatus === 'CL' || rec.leaveStatus === 'ABSENT')) {
+                absent += 1;
+            } else { absent += 1; }
+
+            const perDay = baseSalary / totalWorkingDays;
+            const absentDeduction = absent * perDay;
+            const halfDayDeduction = halfDay * (perDay / 2);
+            
+            let netPayable = baseSalary - absentDeduction - halfDayDeduction;
+            if(netPayable < 0) netPayable = 0;
+
+            return { present, absent, halfDay, netPayable: Math.round(netPayable), workingDays: totalWorkingDays };
+        }
+
+        // Settings Saves
+        function saveAdminSettings() { 
+            schoolSettings.adminPin = document.getElementById('settingAdminPinInput').value.trim() || '123456'; 
+            schoolSettings.receptionistPin = document.getElementById('settingReceptionistPinInput').value.trim() || '4321';
+            saveAllData(); renderAllViews(); showToast('✅ Settings Saved Successfully!', 'success'); 
+        }
+        function saveAdminWhatsappNumbers() { adminWhatsappNumbers.w1 = document.getElementById('adminWhatsapp1').value.trim(); adminWhatsappNumbers.w2 = document.getElementById('adminWhatsapp2').value.trim(); saveAllData(); showToast('📱 Admin Contacts Saved!', 'success'); }
+        function updateCooldownMinutes(mins) { schoolSettings.cooldownMinutes = Number(mins); renderAllViews(); showToast(`Cooldown updated to ${mins} mins`, 'success'); }
+
+        // Data Exports
+        function exportAttendanceCSV() {
+            let csv = '\uFEFFStaff ID,Name,Category,Role,IN Time,OUT Time\n';
+            staffList.forEach(s => { const r = attendanceRecords[s.id] || {}; csv += `"${s.id}","${s.name}","${s.category}","${s.role}","${r.inTime || '-'}","${r.outTime || '-'}"\n`; });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `DSB_Attendance_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); showToast('Excel report downloaded!', 'success');
+        }
+
+        function exportPayrollSalaryCSV() {
+            let csv = '\uFEFFID,Name,Category,Base Salary,Present,Absent,Half-Day,Net Payable\n';
+            staffList.forEach(s => { 
+                const base = Number(s.salary || 0); const stats = getMonthlyPayrollStats(s.id, base);
+                csv += `"${s.id}","${s.name}","${s.category}","${base}","${stats.present}","${stats.absent}","${stats.halfDay}","${stats.netPayable}"\n`; 
+            });
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `DSB_Salary_Register_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); showToast('📊 Excel Payroll downloaded!', 'success');
+        }
+
+        function exportPayrollSalaryPDF() {
+            try {
+                const { jsPDF } = window.jspdf; const doc = new jsPDF();
+                const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                const repMonth = monthNames[currentCalendarDate.getMonth()]; const repYear = currentCalendarDate.getFullYear();
+
+                doc.setFontSize(16); doc.text("Delhi School of Brilliants - Monthly Payroll Report", 14, 15);
+                doc.setFontSize(10); doc.text(`Payroll Month: ${repMonth} ${repYear} | Generated on: ${new Date().toLocaleDateString()}`, 14, 22);
+
+                const tableData = staffList.map(s => {
+                    const baseSalary = Number(s.salary || 0); const stats = getMonthlyPayrollStats(s.id, baseSalary);
+                    return [s.id, s.name, s.category, `Rs. ${baseSalary}`, stats.present, stats.absent, stats.halfDay, `Rs. ${stats.netPayable}`];
+                });
+
+                doc.autoTable({ startY: 28, head: [['ID', 'Name', 'Category', 'Base Salary', 'Present', 'Absent', 'Half-Day', 'Net Payable']], body: tableData, theme: 'grid', headStyles: { fillColor: [16, 185, 129] } });
+                doc.save(`DSB_Payroll_Report_${repMonth}_${repYear}.pdf`); showToast('📄 PDF Payroll Report Generated!', 'success');
+            } catch (e) { showToast('Error generating PDF. Check internet connection for libraries.', 'out'); }
+        }
+
+        function downloadAppHtmlFile() {
+            try { const htmlContent = '<!DOCTYPE html>\n' + document.documentElement.outerHTML; const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'DSB_Attendance_Kiosk_v5.5.html'; a.click(); showToast('📁 HTML App downloaded!', 'success'); } catch (e) {}
+        }
+
+        function renderAllViews() {
+            const adminPinInput = document.getElementById('settingAdminPinInput'); if(adminPinInput) adminPinInput.value = schoolSettings.adminPin || '123456';
+            const repPinInput = document.getElementById('settingReceptionistPinInput'); if(repPinInput) repPinInput.value = schoolSettings.receptionistPin || '4321';
+
+            const selectEl = document.getElementById('kioskTestStaffSelect');
+            if (selectEl) {
+                selectEl.innerHTML = staffList.map(s => {
+                    const r = attendanceRecords[s.id]; let tag = 'Not Punched';
+                    if (r && r.inTime && !r.outTime) tag = `IN: ${r.inTime}`; if (r && r.inTime && r.outTime) tag = 'Completed';
+                    return `<option value="${s.id}" ${s.id === selectedStaffId ? 'selected' : ''}>${s.name} [${s.category}] — ${tag}</option>`;
+                }).join('');
+            }
+
+            let onTimeCount = 0, lateCount = 0, outCount = 0, leaveCount = 0;
+            staffList.forEach(s => {
+                const r = attendanceRecords[s.id];
+                if (r && r.inTime) { if (r.punctuality === 'LATE') lateCount++; else onTimeCount++; } else leaveCount++;
+                if (r && r.outTime) outCount++;
+            });
+            document.getElementById('adminStatTotal').textContent = staffList.length; document.getElementById('adminStatOnTime').textContent = onTimeCount;
+            document.getElementById('adminStatLate').textContent = lateCount; document.getElementById('adminStatOut').textContent = outCount; document.getElementById('adminStatLeave').textContent = leaveCount;
+
+            const catFilter = document.getElementById('attendanceCategoryFilter').value;
+            const tbody = document.getElementById('adminRegisterTableBody');
+            if (tbody) {
+                const filtered = staffList.filter(s => catFilter === 'ALL' || s.category === catFilter);
+                tbody.innerHTML = filtered.map(staff => {
+                    const r = attendanceRecords[staff.id] || {};
+                    let statusHtml = `<span class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-800 text-slate-400">Absent</span>`;
+                    if (r.leaveStatus) statusHtml = `<span class="px-2 py-1 rounded text-[11px] font-bold bg-sky-500/20 text-sky-300">🏖️ ${r.leaveStatus}</span>`;
+                    else if (r.inTime) statusHtml = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300">${r.punctuality === 'LATE' ? 'Late' : 'On-Time'}</span>`;
+                    const photoSrc = staff.photos ? staff.photos[0] : staff.photo;
+                    return `
+                        <tr class="hover:bg-slate-900/70 transition border-b border-slate-800/50">
+                            <td class="py-3.5 px-4 flex items-center gap-3"><img src="${photoSrc}" class="w-10 h-10 rounded-xl object-cover border border-slate-700 bg-slate-800" alt=""><div><div class="font-extrabold text-white">${staff.name}</div><div class="text-[10px] font-mono text-amber-300">ID: ${staff.id}</div></div></td>
+                            <td class="py-3.5 px-4">${statusHtml}</td>
+                            <td class="py-3.5 px-4">${r.inTime ? `<span class="font-mono text-emerald-400">${r.inTime}</span>` : '—'}</td>
+                            <td class="py-3.5 px-4">${r.outTime ? `<span class="font-mono text-rose-400">${r.outTime}</span>` : '—'}</td>
+                            <td class="py-3.5 px-4 font-bold text-slate-300">${formatDuration(r)}</td>
+                            <td class="py-3.5 px-4 text-right space-x-1"><button onclick="markStaffLeave('${staff.id}', 'CL')" class="px-2 py-1 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 transition">CL</button><button onclick="markStaffLeave('${staff.id}', 'HALF_DAY')" class="px-2 py-1 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 transition">Half</button></td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            const payrollTbody = document.getElementById('payrollTableBody');
+            if (payrollTbody) {
+                payrollTbody.innerHTML = staffList.map(staff => {
+                    const baseSalary = Number(staff.salary || 0); 
+                    const photoSrc = staff.photos ? staff.photos[0] : staff.photo;
+                    const stats = getMonthlyPayrollStats(staff.id, baseSalary);
+                    return `
+                        <tr class="hover:bg-slate-900/70 transition border-b border-slate-800/50">
+                            <td class="py-3.5 px-4 flex items-center gap-3"><img src="${photoSrc}" class="w-10 h-10 rounded-xl object-cover border border-slate-700 bg-slate-800" alt=""><div><div class="font-extrabold text-white">${staff.name}</div><div class="text-[10px] font-mono text-amber-300">ID: ${staff.id}</div></div></td>
+                            <td class="py-3.5 px-4 font-mono font-black text-white">₹ ${baseSalary.toLocaleString('en-IN')}</td>
+                            <td class="py-3.5 px-4 font-mono text-emerald-400">${stats.present} Days</td>
+                            <td class="py-3.5 px-4 font-mono text-rose-400">${stats.absent} Days</td>
+                            <td class="py-3.5 px-4 font-mono text-amber-400">${stats.halfDay} Days</td>
+                            <td class="py-3.5 px-4 text-right font-mono font-black text-amber-300 text-base">₹ ${stats.netPayable.toLocaleString('en-IN')}</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            const staffGrid = document.getElementById('adminStaffListGrid');
+            if (staffGrid) {
+                staffGrid.innerHTML = staffList.map(staff => {
+                    const photoSrc = staff.photos ? staff.photos[0] : staff.photo;
+                    const searchStr = `${staff.id.toLowerCase()} ${staff.name.toLowerCase()}`;
+                    return `
+                        <div class="admin-staff-card bg-slate-950 border border-slate-800 hover:border-emerald-500/30 transition rounded-2xl p-4 flex flex-col gap-3" data-search="${searchStr}">
+                            <div class="flex items-center gap-3">
+                                <img src="${photoSrc}" class="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0 bg-slate-800" alt="">
+                                <div class="min-w-0 flex-1">
+                                    <h4 class="text-sm font-extrabold text-white truncate">${staff.name}</h4>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-mono font-black bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">${staff.id}</span>
+                                        <span class="text-[10px] text-slate-400 truncate">${staff.category}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="space-y-2 mt-1">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400 font-bold">Base Salary (₹):</span>
+                                    <input type="number" id="edit_sal_${staff.id}" value="${staff.salary || 0}" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-black text-amber-300 focus:outline-none focus:border-emerald-500 text-right">
+                                </div>
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400 font-bold">Shift IN (Report):</span>
+                                    <input type="time" id="edit_in_${staff.id}" value="${staff.shiftIn || '07:30'}" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-black text-emerald-400 focus:outline-none focus:border-emerald-500 text-right">
+                                </div>
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400 font-bold">Shift OUT:</span>
+                                    <input type="time" id="edit_out_${staff.id}" value="${staff.shiftOut || '14:30'}" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-black text-rose-400 focus:outline-none focus:border-emerald-500 text-right">
+                                </div>
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400 font-bold">Grace (Mins):</span>
+                                    <input type="number" id="edit_grace_${staff.id}" value="${staff.grace !== undefined ? staff.grace : 30}" class="w-20 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-black text-sky-400 focus:outline-none focus:border-emerald-500 text-right">
+                                </div>
+                                <button onclick="saveStaffDetails('${staff.id}')" class="w-full mt-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-black shadow flex items-center justify-center gap-1.5 transition">
+                                    <i class="fa-solid fa-floppy-disk"></i> Save Configuration
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                filterAdminStaffList(); 
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div'); let border = 'border-emerald-400';
+            if (type === 'out') border = 'border-rose-500'; if (type === 'info') border = 'border-amber-400';
+            toast.className = `bg-slate-900/95 border-l-4 ${border} text-white px-4 py-3 rounded-xl shadow-2xl text-xs font-bold backdrop-blur-md transition-all duration-300 pointer-events-auto`;
+            toast.innerHTML = message; container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3400);
+        }
+
+        function updateLiveClock() {
+            const now = new Date();
+            document.getElementById('kioskLiveTime').textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            document.getElementById('kioskLiveDate').textContent = now.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+        }
+
+        function saveAllData() {
+            try {
+                localStorage.setItem('dsb_attendance_v5', JSON.stringify(attendanceRecords));
+                localStorage.setItem('dsb_staff_v5', JSON.stringify(staffList));
+                localStorage.setItem('dsb_settings_v5', JSON.stringify(schoolSettings));
+                localStorage.setItem('dsb_holidays_v5', JSON.stringify(schoolHolidays));
+            } catch (e) {}
+        }
+
+        function loadAllData() {
+            try {
+                const savedStaff = localStorage.getItem('dsb_staff_v5');
+                if (savedStaff) staffList = JSON.parse(savedStaff);
+                else { staffList = INITIAL_STAFF_5.map((s, idx) => ({ ...s, photos: generateStaffMultiAnglePhotos(s.name, s.bgHex, s.accentHex, s.featureSeed || (idx + 1)) })); }
+                
+                const savedAtt = localStorage.getItem('dsb_attendance_v5'); if (savedAtt) attendanceRecords = JSON.parse(savedAtt);
+                const savedSet = localStorage.getItem('dsb_settings_v5'); if (savedSet) schoolSettings = JSON.parse(savedSet);
+                const savedHols = localStorage.getItem('dsb_holidays_v5'); if (savedHols) schoolHolidays = JSON.parse(savedHols);
+            } catch (e) { staffList = INITIAL_STAFF_5.map((s, idx) => ({ ...s, photos: generateStaffMultiAnglePhotos(s.name, s.bgHex, s.accentHex, s.featureSeed || (idx + 1)) })); }
+        }
+
+        window.onload = function () {
+            loadAllData(); updateLiveClock(); setInterval(updateLiveClock, 1000); renderAllViews(); initFrontCamera(); setInterval(runKioskPresenceLoop, 200);
+            renderAdminCalendar();
+        };
+    </script>
+</body>
+</html>
